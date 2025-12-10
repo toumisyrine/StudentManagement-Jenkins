@@ -3,77 +3,87 @@ pipeline {
   
     stages {
         stage('Git') {
-           steps {
-        script {
-            git credentialsId: 'github-credentials', branch: 'main', url: 'https://github.com/toumisyrine/StudentManagement-Jenkins.git'
+            steps {
+                script {
+                    git credentialsId: 'github-credentials', 
+                        branch: 'main', 
+                        url: 'https://github.com/toumisyrine/StudentManagement-Jenkins.git'
+                }
+            }
         }
-    }
-        }
-
+        
         stage('Build with Maven') {
             steps {
-                sh 'mvn clean install '
+                sh 'mvn clean install'
             }
         }
         
         stage('Run Tests') {
             steps {
-                // Run tests with Maven (JUnit and Mockito)
                 sh 'mvn test'
             }
         }
         
-         stage(' Build DockerImage') {
+        stage('Build Docker Image') {
             steps {
-                
-                sh 'docker build -t syrinaaa/StudentManagement-Jenkins:latest -f DockerFile .'
+                sh 'docker build -t syrinaaa/studentmanagement-jenkins:latest .'
             }
         }
+        
         stage('Push to Docker Hub') {
             steps {
-        script {
-            withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                sh 'docker push syrinaaa/StudentManagement-Jenkins:latest'
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub-credentials', 
+                        usernameVariable: 'DOCKER_USERNAME', 
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+                        sh 'docker push syrinaaa/studentmanagement-jenkins:latest'
+                    }
+                }
             }
         }
-    }
         
-}
-         stage(' Docker Compose') {
+        stage('Docker Compose') {
             steps {
-                
                 sh 'docker-compose up -d'
             }
         }
+        
         stage('Jacoco Static Analysis') {
             steps {
                 junit 'target/surefire-reports/**/*.xml'
                 jacoco()
+            }
         }
-        }
-        stage ('MVN SONARQUBE' ) {
+        
+        stage('MVN SONARQUBE') {
             steps {
-               withCredentials([string(credentialsId: 'jenkins-sonar', variable: 'SONAR_TOKEN' )]) {
-               sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
-            }
+                withCredentials([string(credentialsId: 'jenkins-sonar', variable: 'SONAR_TOKEN')]) {
+                    sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
+                }
             }
         }
+        
         stage('Deploy to Nexus') {
             steps {
                 sh 'mvn deploy'
             }
         }
+        
         stage('Prometheus') {
             steps {
-               sh 'docker start prometheus '
+                sh 'docker start prometheus'
             }
         }
+        
         stage('Grafana') {
             steps {
-               sh 'docker start grafana'
+                sh 'docker start grafana'
             }
         }
+        
         stage('Terraform') {
             steps {
                 sh 'terraform init'  
@@ -83,20 +93,19 @@ pipeline {
     }
        
     post {
-    success {
-        emailext(
-            subject: "Build Success: ${currentBuild.fullDisplayName}",
-            body: "Le pipeline a réussi. Voir les détails du build ici: ${env.BUILD_URL}",
-            to: 'toumi.syrine@esprit.tn'
-        )
+        success {
+            emailext(
+                subject: "Build Success: ${currentBuild.fullDisplayName}",
+                body: "Le pipeline a réussi. Voir les détails du build ici: ${env.BUILD_URL}",
+                to: 'toumi.syrine@esprit.tn'
+            )
+        }
+        failure {
+            emailext(
+                subject: "Build Failed: ${currentBuild.fullDisplayName}",
+                body: "Le pipeline a échoué. Voir les détails du build ici: ${env.BUILD_URL}",
+                to: 'toumi.syrine@esprit.tn'
+            )
+        }
     }
-    failure {
-        emailext(
-            subject: "Build Failed: ${currentBuild.fullDisplayName}",
-            body: "Le pipeline a échoué. Voir les détails du build ici: ${env.BUILD_URL}",
-            to: 'toumi.syrine@esprit.tn'
-        )
-    }
-    }
-    }
-    
+}
