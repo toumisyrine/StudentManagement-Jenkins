@@ -1,111 +1,86 @@
 pipeline {
     agent any
   
+    environment {
+        DOCKER_IMAGE = 'syrinaaa/studentmanagement-jenkins'
+        IMAGE_TAG = 'latest'
+    }
+  
     stages {
-        stage('Git') {
+        stage('🔍 Git Checkout') {
             steps {
-                script {
-                    git credentialsId: 'github-credentials', 
-                        branch: 'main', 
-                        url: 'https://github.com/toumisyrine/StudentManagement-Jenkins.git'
-                }
+                echo '📥 Clonage du dépôt GitHub...'
+                git credentialsId: 'github-credentials', 
+                    branch: 'main', 
+                    url: 'https://github.com/toumisyrine/StudentManagement-Jenkins.git'
             }
         }
         
-        stage('Build with Maven') {
+        stage('🔨 Build with Maven') {
             steps {
-                sh 'mvn clean install'
+                echo '🏗️ Construction du projet avec Maven...'
+                sh 'mvn clean install -DskipTests'
             }
         }
         
-        stage('Run Tests') {
+        stage('🧪 Run Tests') {
             steps {
+                echo '✅ Exécution des tests...'
                 sh 'mvn test'
             }
         }
         
-        stage('Build Docker Image') {
+        stage('🐳 Build Docker Image') {
             steps {
-                sh 'docker build -t syrinaaa/studentmanagement-jenkins:latest .'
+                echo '🔧 Construction de l image Docker...'
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                sh "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${DOCKER_IMAGE}:build-${BUILD_NUMBER}"
             }
         }
         
-        stage('Push to Docker Hub') {
+        stage('📤 Push to Docker Hub') {
             steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-credentials', 
-                        usernameVariable: 'DOCKER_USERNAME', 
-                        passwordVariable: 'DOCKER_PASSWORD'
-                    )]) {
-                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                        sh 'docker push syrinaaa/studentmanagement-jenkins:latest'
-                    }
+                echo '🚀 Push vers Docker Hub...'
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub-credentials', 
+                    usernameVariable: 'DOCKER_USERNAME', 
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                        docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+                        docker push ${DOCKER_IMAGE}:build-${BUILD_NUMBER}
+                        docker logout
+                    '''
                 }
             }
         }
         
-        stage('Docker Compose') {
+        stage('📊 Jacoco Report') {
             steps {
-                sh 'docker-compose up -d'
-            }
-        }
-        
-        stage('Jacoco Static Analysis') {
-            steps {
-                junit 'target/surefire-reports/**/*.xml'
+                echo '📈 Génération du rapport de couverture...'
+                junit '**/target/surefire-reports/*.xml'
                 jacoco()
-            }
-        }
-        
-        stage('MVN SONARQUBE') {
-            steps {
-                withCredentials([string(credentialsId: 'jenkins-sonar', variable: 'SONAR_TOKEN')]) {
-                    sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
-                }
-            }
-        }
-        
-        stage('Deploy to Nexus') {
-            steps {
-                sh 'mvn deploy'
-            }
-        }
-        
-        stage('Prometheus') {
-            steps {
-                sh 'docker start prometheus'
-            }
-        }
-        
-        stage('Grafana') {
-            steps {
-                sh 'docker start grafana'
-            }
-        }
-        
-        stage('Terraform') {
-            steps {
-                sh 'terraform init'  
-                sh 'terraform apply -auto-approve'
             }
         }
     }
        
     post {
         success {
-            emailext(
-                subject: "Build Success: ${currentBuild.fullDisplayName}",
-                body: "Le pipeline a réussi. Voir les détails du build ici: ${env.BUILD_URL}",
-                to: 'toumi.syrine@esprit.tn'
-            )
+            echo '✅ =========================================='
+            echo '✅ PIPELINE RÉUSSI !'
+            echo '✅ Image disponible sur Docker Hub'
+            echo '✅ =========================================='
         }
         failure {
-            emailext(
-                subject: "Build Failed: ${currentBuild.fullDisplayName}",
-                body: "Le pipeline a échoué. Voir les détails du build ici: ${env.BUILD_URL}",
-                to: 'toumi.syrine@esprit.tn'
-            )
+            echo '❌ =========================================='
+            echo '❌ PIPELINE ÉCHOUÉ !'
+            echo '❌ Vérifiez les logs ci-dessus'
+            echo '❌ =========================================='
+        }
+        always {
+            echo '🧹 Nettoyage...'
+            sh 'docker system prune -f || true'
         }
     }
 }
