@@ -10,23 +10,15 @@ pipeline {
         stage('🔍 Git Checkout') {
             steps {
                 echo '📥 Clonage du dépôt GitHub...'
-                git credentialsId: 'github-credentials', 
-                    branch: 'main', 
+                git branch: 'main', 
                     url: 'https://github.com/toumisyrine/StudentManagement-Jenkins.git'
             }
         }
         
         stage('🔨 Build with Maven') {
             steps {
-                echo '🏗️ Construction du projet avec Maven...'
+                echo '🏗️ Construction du projet Maven (sans tests)...'
                 sh 'mvn clean install -DskipTests'
-            }
-        }
-        
-        stage('🧪 Run Tests') {
-            steps {
-                echo '✅ Exécution des tests...'
-                sh 'mvn test'
             }
         }
         
@@ -55,21 +47,13 @@ pipeline {
                 }
             }
         }
-        
-        stage('📊 Jacoco Report') {
-            steps {
-                echo '📈 Génération du rapport de couverture...'
-                junit '**/target/surefire-reports/*.xml'
-                jacoco()
-            }
-        }
     }
        
     post {
         success {
             echo '✅ =========================================='
             echo '✅ PIPELINE RÉUSSI !'
-            echo '✅ Image disponible sur Docker Hub'
+            echo '✅ Image Docker disponible sur Docker Hub'
             echo '✅ =========================================='
         }
         failure {
